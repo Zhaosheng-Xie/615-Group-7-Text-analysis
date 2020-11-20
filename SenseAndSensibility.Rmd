@@ -128,6 +128,7 @@ plotMarianne <- ggplot(marianneSentimentCount, aes(sentiment, n, fill=n))+
 grid.arrange(plotElinor, plotMarianne, nrow=2)
 ```
 
+
 ```{r}
 # Count word in 4210 sentences
 wordCount <- tnum.query("*sense# has count:word", max=5000)
@@ -144,6 +145,7 @@ ggplot(df, aes(ordinalNumber, wordCount))+
   geom_point(position="jitter", alpha=0.3)+
   geom_smooth()
 ```
+
 
 ```{r}
 # Data frame of sentences with its ordinal number
@@ -166,6 +168,27 @@ ggplot(sentenceWord,aes(as.factor(chapter)))+
   )
 
 ```
+
+```{r}
+# character sentiment
+elinorWords$character <- "Elinor"
+marianneWords$character <- "Marianne"
+characterWords <- rbind(elinorWords, marianneWords)
+
+sentimentScore <- characterWords %>%
+  inner_join(get_sentiments("afinn")) 
+
+sentenceSentiment <- sentimentScore %>%
+  group_by(subject,character) %>%
+  summarize(overall_sentiment=sum(value))
+
+sentenceSentiment <- left_join(sentenceSentiment, sentenceWord, by="subject")
+
+ggplot(sentenceSentiment, aes(numeric.value, overall_sentiment, color=character))+
+  geom_smooth(show.legend= TRUE, se=FALSE)
+  # facet_wrap(~character)
+```
+
 ```{r}
 # tnum.deleteByQuery("*sense* has text =REGEXP(\"Elinor\")", max=700)
 # tnum.deleteByQuery("*sense* has text =REGEXP(\"Marianne\")", max = 600)
@@ -173,3 +196,5 @@ ggplot(sentenceWord,aes(as.factor(chapter)))+
 # tnum.deleteByQuery("*sense# has count:word", max=5000)
 # tnum.deleteByQuery("*sense* has ordinal", max=5000)
 ```
+
+
