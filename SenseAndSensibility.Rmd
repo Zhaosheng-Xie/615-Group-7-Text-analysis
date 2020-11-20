@@ -1,0 +1,175 @@
+---
+title: "Jane Austen's Text analysis"
+author: "Group 7"
+date: "2020/11/17"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, error=FALSE)
+library(tidyverse)
+library(tnum)
+library(magrittr)
+library(janeaustenr)
+library(tidytext)
+library(wordcloud)
+library(gridExtra)
+```
+
+# Introduction
+In this project, we used several functions in tnum package to make a simple text analysis on Jane Austen's Sense and sensibility. We search for sentences with Elinor and Marianne then tagged them with "Group7_*". We also added a new chapter column in our data frame to show exact chapter number and count frequency.
+
+# Sense and sensibility
+```{r}
+tnum.authorize(ip = "54.158.136.133")
+# phrase list: level 4, to chapter
+chapterList <- tnum.getDatabasePhraseList("subject", levels = 4)
+chapterPlot <- tnum.makePhraseGraphFromPathList(chapterList)
+tnum.plotGraph(chapterPlot)
+```
+
+```{r}
+# find Elinor and Marianne in Sense and Sensibility
+# Elinor appears in 653 sentences
+elinorSentence <- tnum.query("*sense* has text =REGEXP(\"Elinor\")", max=700)
+elinorText <- tnum.objectsToDf(elinorSentence)
+elinorText
+# Tag these sentences with "Group7_Elinor"
+tnum.tagByQuery("*sense* has text =REGEXP(\"Elinor\")","Group7_Elinor")
+
+
+# Marianne appears in 524 sentences
+marianneSentence <- tnum.query("*sense* has text =REGEXP(\"Marianne\")", max = 600)
+marianneText <- tnum.objectsToDf(marianneSentence)
+marianneText
+# Tag these sentences with "Group7_Marianne"
+tnum.tagByQuery("*sense* has text =REGEXP(\"Marianne\")","Group7_Marianne")
+
+
+```
+
+```{r}
+# Extract the 148 sentenses where Elinor and Marianne both appears
+emSentence <- tnum.query("@[Group7_Elinor,Group7_Marianne]")
+# Plot the path of tagged sentences
+emText <- tnum.objectsToDf(emSentence)
+emPlot <- tnum.makePhraseGraphFromPathList(emText$subject)
+tnum.plotGraph(emPlot)
+```
+
+```{r}
+# Make a wordcloud showing words appear most in sentences with Elinor
+elinorTextSub <- elinorText %>%
+  anti_join(emText, by="subject")
+
+elinorWords <- elinorTextSub %>%
+  unnest_tokens(word, string.value) %>%
+  filter(is.na(as.double(word))) %>%
+  anti_join(stop_words)
+
+elinorWordCount <- elinorWords %>%
+  count(word, sort=TRUE) %>%
+  filter(word != "elinor")
+
+wordcloud(
+  word=elinorWordCount$word,
+  freq=elinorWordCount$n,
+  max.words=70
+)
+# Make a wordcloud showing words appear most in sentences with Marianne
+marianneTextSub <- marianneText %>%
+  anti_join(emText, by="subject")
+
+marianneWords <- marianneTextSub %>%
+  unnest_tokens(word, string.value) %>%
+  filter(is.na(as.double(word))) %>%
+  anti_join(stop_words)
+
+marianneWordCount <- marianneWords %>%
+  count(word, sort=TRUE) %>%
+  filter(word != "marianne")
+
+wordcloud(
+  word=marianneWordCount$word,
+  freq=marianneWordCount$n,
+  max.words=70
+)
+# Do a simple sentiment analysis comparing Elinor and Marianne's sentences
+elinorSentiment <- elinorWords %>%
+  inner_join(get_sentiments("nrc")) 
+  
+elinorSentimentCount <- elinorSentiment %>%
+  count(sentiment, sort=TRUE)
+
+plotElinor <- ggplot(elinorSentimentCount, aes(sentiment, n, fill=n))+
+  geom_col()+
+  labs(
+    title="Sentiment analysis for sentences with Elinor",
+    x="Sentiment",
+    y=""
+  )
+
+marianneSentiment <- marianneWords %>%
+  inner_join(get_sentiments("nrc")) 
+  
+marianneSentimentCount <- marianneSentiment %>%
+  count(sentiment, sort=TRUE)
+
+plotMarianne <- ggplot(marianneSentimentCount, aes(sentiment, n, fill=n))+
+  geom_col()+
+  labs(
+    title="Sentiment analysis for sentences with Marianne",
+    x="Sentiment",
+    y=""
+  )
+
+grid.arrange(plotElinor, plotMarianne, nrow=2)
+```
+
+```{r}
+# Count word in 4210 sentences
+wordCount <- tnum.query("*sense# has count:word", max=5000)
+# Show word count in the first 10 sentences
+wordCount[1:10]
+# Plot a histogram showing the distribution of number of words per sentence
+hist(as.numeric(wordCount))
+
+# Mark each sentence with its ordinal number
+ordinalNum <- tnum.query("*sense* has ordinal", max=5000)
+# Scatterplot of ordinal number versus word count
+df <- data_frame(ordinalNumber=as.numeric(ordinalNum), wordCount=as.numeric(wordCount))
+ggplot(df, aes(ordinalNumber, wordCount))+
+  geom_point(position="jitter", alpha=0.3)+
+  geom_smooth()
+```
+
+```{r}
+# Data frame of sentences with its ordinal number
+sentenceWord <- tnum.objectsToDf(ordinalNum)
+# Data frame for each sentence and its chapter number
+df.cha <- data.frame(subject=1:length(ordinalNum), chapter=0)
+for (i in 1:length(ordinalNum)){
+  df.cha$chapter[i] <- as.numeric(substring(str_split(tnum.getAttrFromList(ordinalNum[i], "subject"), "[:/]")[[1]][4], 9))
+}
+# Add a chapter number column to sentenceWord data frame
+sentenceWord <- mutate(sentenceWord,chapter=df.cha$chapter)
+head(sentenceWord)
+
+# Histograph showing number of sentences in every chapter
+ggplot(sentenceWord,aes(as.factor(chapter)))+
+  geom_histogram(bins=30, stat="count")+
+  labs(
+    title="Subjects number of each chapter",
+    x="Chapter Number"
+  )
+
+```
+```{r}
+# tnum.deleteByQuery("*sense* has text =REGEXP(\"Elinor\")", max=700)
+# tnum.deleteByQuery("*sense* has text =REGEXP(\"Marianne\")", max = 600)
+# tnum.deleteByQuery("@[Group7_Elinor,Group7_Marianne]")
+# tnum.deleteByQuery("*sense# has count:word", max=5000)
+# tnum.deleteByQuery("*sense* has ordinal", max=5000)
+```
