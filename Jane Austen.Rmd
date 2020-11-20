@@ -1,0 +1,80 @@
+---
+title: "Jane Austen's Text analysis"
+author: "Group 7"
+date: "2020/11/17"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+library(tnum)
+library(dplyr)
+library(magrittr)
+library(stringr)
+library(tidyverse)
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Introduction
+  In this case, we make a demo of 《Sense and sensibility》. We find these subjects which contain both 2 words: Elinor and Marianne.
+Also, we add a new chapter column in our data frame to show exact chapter number and count frequency.
+
+# Sense and sensibility
+```{r}
+tnum.authorize(ip="54.158.136.133")
+# phrase list: level 4
+level4 <- tnum.getDatabasePhraseList("subject", levels = 4)
+level4
+```
+
+```{r}
+# find Elinor and Marianne
+num_E <- tnum.query("*sense* has text =REGEXP(\"Elinor\")", max = 700)
+textdf_E <- tnum.objectsToDf(num_E)
+
+num_M <- tnum.query("*sense* has text =REGEXP(\"Marianne\")", max = 600)
+textdf_M <- tnum.objectsToDf(num_M)
+# tag
+tnum.tagByQuery("*sense* has text =REGEXP(\"Elinor\")","Group7_Elinor")
+tnum.tagByQuery("*sense* has text =REGEXP(\"Marianne\")","Group7_Marianne")
+# extract by tags
+# find subjects which contain both 2 tags
+num_E_M <- tnum.query("@[Group7_Elinor,Group7_Marianne]")
+```
+
+```{r}
+# plot
+textdf_E_M <- tnum.objectsToDf(num_E_M)
+pic_E_M <- tnum.makePhraseGraphFromPathList(textdf_E_M$subject)
+tnum.plotGraph(pic_E_M)
+```
+
+```{r}
+# count word
+query_t1 <- tnum.query("*sense* has count:word", max=10000)
+query_t1[1:10]
+# plot
+hist(as.numeric(query_t1))
+# ordinal
+query_t2 <- tnum.query("*sense* has ordinal", max=10000)
+# plot
+plot(x = as.numeric(query_t2), y = as.numeric(query_t1))
+```
+
+```{r}
+# mutate chapter of query_t2
+textdf_t2 <- tnum.objectsToDf(query_t2)
+df.cha <- data.frame(subject=1:length(query_t2), chapter=0)
+for (i in 1:length(query_t2)){
+  df.cha$chapter[i] <- as.numeric(substring(str_split(tnum.getAttrFromList(query_t2[i], "subject"), "[:/]")[[1]][4], 9))
+}
+textdf_t2 <- mutate(textdf_t2,chapter=df.cha$chapter)
+head(textdf_t2)
+# plot
+ggplot(textdf_t2)+
+  geom_histogram(mapping = aes(x=chapter))+
+
+  ggtitle("Subjects number of each chapter")
+
+```
+
